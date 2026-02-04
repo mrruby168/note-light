@@ -44,7 +44,7 @@ input[type="color"]{width:28px;height:28px;border:2px solid rgba(255,255,255,0.8
 input[type="color"]::-webkit-color-swatch-wrapper{padding:2px}
 input[type="color"]::-webkit-color-swatch{border-radius:3px;border:none}
 select{padding:4px 8px;border:2px solid rgba(255,255,255,0.8);border-radius:6px;background:rgba(255,255,255,0.8);font-size:12px;cursor:pointer;outline:none}
-.editor{flex:1;display:flex;flex-direction:column;padding:20px 25px 90px}
+.editor{flex:1;display:flex;flex-direction:column;padding:20px 25px 20px}
 .title-input{font-size:24px;font-weight:700;border:none;outline:none;background:transparent;margin-bottom:15px}
 .title-input::placeholder{color:#ccc}
 .content{flex:1;border:none;outline:none;font-size:25px;line-height:1.6;overflow-y:auto;resize:none}
@@ -53,13 +53,12 @@ select{padding:4px 8px;border:2px solid rgba(255,255,255,0.8);border-radius:6px;
 .content::-webkit-scrollbar-thumb{background:#ddd;border-radius:2px}
 .content ul,.content ol{margin-left:30px;margin-bottom:10px}
 .content li{margin-bottom:5px}
-.btn-ok{position:absolute;bottom:18px;right:18px;padding:14px 36px;background:#10b981;color:#fff;border:none;border-radius:12px;font-size:18px;font-weight:700;cursor:pointer;transition:all .2s;box-shadow:0 4px 15px rgba(16,185,129,0.3)}
-.btn-ok:hover{background:#059669;transform:translateY(-2px);box-shadow:0 6px 20px rgba(16,185,129,0.4)}
-.btn-ok:active{transform:translateY(0)}
+.save-indicator{position:absolute;bottom:18px;right:18px;padding:8px 16px;background:rgba(16,185,129,0.1);color:#10b981;border-radius:8px;font-size:14px;font-weight:600;opacity:0;transition:opacity .3s}
+.save-indicator.show{opacity:1}
 .empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#999}
 .empty-state span{font-size:50px;margin-bottom:10px}
 .install-btn{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);padding:12px 24px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;border-radius:25px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 15px rgba(102,126,234,0.4);display:none;z-index:100}
-@media(max-width:768px){.app{flex-direction:column;padding:10px;gap:10px}.sidebar{width:100%;max-height:35%;min-height:180px}.toolbar{padding:10px 12px}.editor{padding:15px 15px 90px}.btn-ok{padding:12px 30px;font-size:16px}}
+@media(max-width:768px){.app{flex-direction:column;padding:10px;gap:10px}.sidebar{width:100%;max-height:35%;min-height:180px}.toolbar{padding:10px 12px}.editor{padding:15px}}
 </style>
 </head>
 <body>
@@ -107,7 +106,7 @@ select{padding:4px 8px;border:2px solid rgba(255,255,255,0.8);border-radius:6px;
 <input class="title-input" id="title" placeholder="Tiêu đề...">
 <div class="content" id="content" contenteditable data-placeholder="Viết nội dung..."></div>
 </div>
-<button class="btn-ok" onclick="save()">OK</button>
+<div class="save-indicator" id="saveIndicator">✓ Đã lưu</div>
 </div>
 </main>
 </div>
@@ -117,6 +116,7 @@ select{padding:4px 8px;border:2px solid rgba(255,255,255,0.8);border-radius:6px;
 let data = JSON.parse(localStorage.getItem('quicknotes') || '[]');
 let cur = null;
 let nid = data.length ? Math.max(...data.map(n => n.id)) + 1 : 1;
+let saveTimeout = null;
 const $ = id => document.getElementById(id);
 
 function render() {
@@ -134,23 +134,10 @@ function render() {
     `).join('');
 }
 
-function addNote() {
-    const n = { id: nid++, title: '', content: '' };
-    data.push(n);
-    localStorage.setItem('quicknotes', JSON.stringify(data));
-    sel(n.id);
-    $('title').focus();
-}
-
-function sel(id) {
-    cur = id;
-    const n = data.find(x => x.id === id);
-    if (!n) return;
-    $('empty').style.display = 'none';
-    $('editor').style.display = 'flex';
-    $('title').value = n.title;
-    $('content').innerHTML = n.content;
-    render();
+function showSaveIndicator() {
+    const indicator = $('saveIndicator');
+    indicator.classList.add('show');
+    setTimeout(() => indicator.classList.remove('show'), 1500);
 }
 
 function save() {
@@ -160,6 +147,61 @@ function save() {
     n.title = $('title').value;
     n.content = $('content').innerHTML;
     localStorage.setItem('quicknotes', JSON.stringify(data));
+    render();
+    showSaveIndicator();
+}
+
+function autoSave() {
+    if (saveTimeout) clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(() => {
+        if (!cur) return;
+        const n = data.find(x => x.id === cur);
+        if (!n) return;
+        n.title = $('title').value;
+        n.content = $('content').innerHTML;
+        localStorage.setItem('quicknotes', JSON.stringify(data));
+        render();
+    }, 500);
+}
+
+function addNote() {
+    // Lưu note hiện tại trước khi tạo mới
+    if (cur) {
+        const n = data.find(x => x.id === cur);
+        if (n) {
+            n.title = $('title').value;
+            n.content = $('content').innerHTML;
+            localStorage.setItem('quicknotes', JSON.stringify(data));
+        }
+    }
+    
+    // Tạo note mới
+    const n = { id: nid++, title: '', content: '' };
+    data.push(n);
+    localStorage.setItem('quicknotes', JSON.stringify(data));
+    sel(n.id);
+    $('title').focus();
+    showSaveIndicator();
+}
+
+function sel(id) {
+    // Lưu note hiện tại trước khi chuyển
+    if (cur && cur !== id) {
+        const n = data.find(x => x.id === cur);
+        if (n) {
+            n.title = $('title').value;
+            n.content = $('content').innerHTML;
+            localStorage.setItem('quicknotes', JSON.stringify(data));
+        }
+    }
+    
+    cur = id;
+    const n = data.find(x => x.id === id);
+    if (!n) return;
+    $('empty').style.display = 'none';
+    $('editor').style.display = 'flex';
+    $('title').value = n.title;
+    $('content').innerHTML = n.content;
     render();
 }
 
@@ -178,6 +220,7 @@ function del(id) {
 function fmt(c, v = null) {
     document.execCommand(c, false, v);
     $('content').focus();
+    autoSave();
 }
 
 function setSize(px) {
@@ -187,7 +230,12 @@ function setSize(px) {
         f.style.fontSize = px + 'px';
     });
     $('content').focus();
+    autoSave();
 }
+
+// Auto-save khi gõ
+$('title').addEventListener('input', autoSave);
+$('content').addEventListener('input', autoSave);
 
 document.onkeydown = e => {
     if ((e.ctrlKey || e.metaKey) && e.key === 's') {
@@ -195,6 +243,18 @@ document.onkeydown = e => {
         save();
     }
 };
+
+// Lưu khi rời trang
+window.addEventListener('beforeunload', () => {
+    if (cur) {
+        const n = data.find(x => x.id === cur);
+        if (n) {
+            n.title = $('title').value;
+            n.content = $('content').innerHTML;
+            localStorage.setItem('quicknotes', JSON.stringify(data));
+        }
+    }
+});
 
 let deferredPrompt;
 window.addEventListener('beforeinstallprompt', e => {
