@@ -1,4 +1,4 @@
-const CACHE_NAME = 'quicknotes-v2';
+const CACHE_NAME = 'quicknotes-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -23,3 +23,4 @@ self.addEventListener('fetch', e => {
   e.respondWith(caches.match(e.request).then(res => res || fetch(e.request)));
 
 });
+
